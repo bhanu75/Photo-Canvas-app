@@ -1,7 +1,7 @@
 {
   "appId": "com.photocanvas.app",
   "appName": "Photo Canvas",
-  "webDir": ".",
+  "webDir": "www",
   "android": {
     "allowMixedContent": true
   }
