@@ -25,10 +25,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Create web build folder
+      - name: Copy web app
         run: |
           mkdir -p www
-          echo "<h1>Photo Canvas</h1>" > www/index.html
+          cp -r *.html *.css *.js assets www/ 2>/dev/null || true
 
       - name: Verify Capacitor
         run: npx cap --version
