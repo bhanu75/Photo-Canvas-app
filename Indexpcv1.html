@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a2e">
+<title>Photo Canvas</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#fff;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+#screen-home,#screen-editor{position:absolute;inset:0;display:flex;flex-direction:column;transition:opacity .25s}
+#screen-home{align-items:center;justify-content:center;gap:20px;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)}
+.logo{font-size:48px;margin-bottom:8px}
+h1{font-size:24px;font-weight:700;letter-spacing:1px}
+.subtitle{font-size:14px;color:#aaa;margin-top:-10px}
+.btn-main{display:flex;align-items:center;gap:10px;padding:16px 32px;border-radius:50px;border:none;cursor:pointer;font-size:17px;font-weight:600;transition:transform .15s,box-shadow .15s}
+.btn-camera{background:linear-gradient(135deg,#e94560,#f5a623);color:#fff}
+.btn-gallery{background:rgba(255,255,255,0.1);color:#fff;border:1.5px solid rgba(255,255,255,0.25)}
+.btn-main:active{transform:scale(0.95)}
+.features{display:flex;gap:24px;margin-top:8px}
+.feat{text-align:center;font-size:12px;color:#aaa}
+.feat-icon{font-size:24px;display:block;margin-bottom:4px}
+
+#screen-editor{background:#111;display:none;flex-direction:column}
+#toolbar-top{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1a1a2e;border-bottom:1px solid #333;min-height:52px}
+#toolbar-top button{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:10px;padding:7px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap}
+#toolbar-top button:active{background:rgba(255,255,255,0.2)}
+#toolbar-top button.active{background:#e94560;border-color:#e94560}
+.spacer{flex:1}
+#canvas-wrap{flex:1;position:relative;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center}
+#main-canvas{touch-action:none;cursor:crosshair;max-width:100%;max-height:100%;display:block}
+#toolbar-bottom{background:#1a1a2e;border-top:1px solid #333;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.tool-row{display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none}
+.tool-row::-webkit-scrollbar{display:none}
+.color-btn{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;flex-shrink:0;transition:transform .1s}
+.color-btn.active,.color-btn:active{transform:scale(1.3);border-color:#fff}
+.size-btn{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.size-btn.active{background:#e94560;border-color:#e94560}
+.sticker-btn{font-size:26px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:5px 8px;cursor:pointer;flex-shrink:0}
+.sticker-btn:active{transform:scale(0.9)}
+.section-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;flex-shrink:0;padding:0 4px}
+
+#sticker-panel{position:absolute;bottom:0;left:0;right:0;background:#1a1a2e;border-top:2px solid #333;padding:12px;z-index:20;max-height:55%;overflow-y:auto;transition:transform .3s}
+#sticker-panel.hidden{transform:translateY(100%)}
+.sticker-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
+.sp-btn{font-size:32px;text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:12px;cursor:pointer;transition:transform .15s;border:none}
+.sp-btn:active{transform:scale(0.85);background:rgba(233,69,96,0.3)}
+.panel-title{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600}
+.panel-close{background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;padding:4px}
+
+#placed-stickers{position:absolute;inset:0;pointer-events:none}
+.placed{position:absolute;pointer-events:all;cursor:move;user-select:none;font-size:40px;transform-origin:center;touch-action:none}
+.placed.selected{outline:2px dashed #e94560;outline-offset:4px;border-radius:8px}
+.delete-handle{position:absolute;top:-12px;right:-12px;background:#e94560;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;z-index:10}
+.resize-handle{position:absolute;bottom:-8px;right:-8px;background:#fff;border:2px solid #e94560;border-radius:50%;width:18px;height:18px;cursor:se-resize;z-index:10}
+
+#toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(233,69,96,0.95);color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;z-index:99;opacity:0;pointer-events:none;transition:opacity .3s;white-space:nowrap}
+#toast.show{opacity:1}
+
+input[type=file]{display:none}
+input[type=range]{width:80px;accent-color:#e94560}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- HOME SCREEN -->
+<div id="screen-home">
+  <div class="logo">🎨</div>
+  <h1>Photo Canvas</h1>
+  <p class="subtitle">Draw · Sticker · Export</p>
+  <button class="btn-main btn-camera" onclick="openCamera()">📷 Take Photo</button>
+  <button class="btn-main btn-gallery" onclick="document.getElementById('file-in').click()">🖼️ Gallery / File</button>
+  <input type="file" id="file-in" accept="image/*" onchange="loadFile(event)">
+  <div class="features">
+    <div class="feat"><span class="feat-icon">✏️</span>Draw</div>
+    <div class="feat"><span class="feat-icon">🎭</span>Stickers</div>
+    <div class="feat"><span class="feat-icon">💾</span>Export</div>
+    <div class="feat"><span class="feat-icon">🗑️</span>Undo</div>
+  </div>
+</div>
+
+<!-- EDITOR SCREEN -->
+<div id="screen-editor">
+  <div id="toolbar-top">
+    <button onclick="goHome()">← Back</button>
+    <button id="btn-draw" class="active" onclick="setTool('draw')">✏️ Draw</button>
+    <button id="btn-erase" onclick="setTool('erase')">⬜ Erase</button>
+    <button id="btn-sticker" onclick="toggleStickerPanel()">🎭 Stickers</button>
+    <div class="spacer"></div>
+    <button onclick="undoLast()">↩ Undo</button>
+    <button onclick="exportPhoto()">💾 Save</button>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+    <div id="placed-stickers"></div>
+  </div>
+  <div id="toolbar-bottom">
+    <div class="tool-row">
+      <span class="section-label">Color</span>
+      <div class="color-btn active" style="background:#fff" data-c="#ffffff" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#e94560" data-c="#e94560" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#f5a623" data-c="#f5a623" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#2ecc71" data-c="#2ecc71" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#3498db" data-c="#3498db" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#9b59b6" data-c="#9b59b6" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#1abc9c" data-c="#1abc9c" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#e74c3c" data-c="#e74c3c" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#f39c12" data-c="#f39c12" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#000" data-c="#000000" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#ffff00" data-c="#ffff00" onclick="setColor(this)"></div>
+      <div class="color-btn" style="background:#ff69b4" data-c="#ff69b4" onclick="setColor(this)"></div>
+      <input type="color" id="custom-color" value="#ffffff" style="width:28px;height:28px;border-radius:50%;border:2px solid #555;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0" title="Custom" onchange="setCustomColor(this.value)">
+    </div>
+    <div class="tool-row">
+      <span class="section-label">Size</span>
+      <button class="size-btn" data-s="3" onclick="setBrushSize(this)">S</button>
+      <button class="size-btn active" data-s="7" onclick="setBrushSize(this)">M</button>
+      <button class="size-btn" data-s="14" onclick="setBrushSize(this)">L</button>
+      <button class="size-btn" data-s="28" onclick="setBrushSize(this)">XL</button>
+      <input type="range" min="1" max="60" value="7" id="brush-range" oninput="brushSizeFromRange(this.value)" title="Brush size">
+      <span id="brush-size-label" style="font-size:12px;color:#aaa;min-width:24px">7px</span>
+      <span class="section-label" style="margin-left:8px">Opacity</span>
+      <input type="range" min="10" max="100" value="100" id="opacity-range" oninput="setOpacity(this.value)" title="Opacity">
+      <span id="opacity-label" style="font-size:12px;color:#aaa;min-width:28px">100%</span>
+    </div>
+  </div>
+  <div id="sticker-panel" class="hidden">
+    <div class="panel-title">
+      <span>🎭 Project Status Stickers</span>
+      <button class="panel-close" onclick="toggleStickerPanel()">✕</button>
+    </div>
+    <div id="sticker-tabs" style="display:flex;gap:8px;margin-top:10px;overflow-x:auto"></div>
+    <div class="sticker-grid" id="sticker-grid"></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('main-canvas');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+const stickerDiv = document.getElementById('placed-stickers');
+
+let tool = 'draw', color = '#ffffff', brushSize = 7, opacity = 1;
+let drawing = false, lastX = 0, lastY = 0;
+let history = [], img = null;
+let selectedSticker = null, stickerCount = 0;
+
+// ----- STICKER LIBRARY -----
+const stickerLib = {
+  "Status": ["✅","❌","⏳","🔄","⚠️","🚀","🛑","✔️","📌","🔔","💡","🏁","🎯","📊","📈","📉","🔒","🔓","📋","🗂️"],
+  "Emotions": ["🎉","🔥","💯","👍","👎","❤️","💔","😊","😎","🤔","😱","🙌","💪","🤩","😤"],
+  "Arrows": ["⬆️","⬇️","⬅️","➡️","↗️","↙️","🔃","🔁","♻️","🔝","🆕","🔙","🔛","🆗","🆘"],
+  "Priority": ["🚨","🆘","❗","‼️","❓","⁉️","🔴","🟠","🟡","🟢","🔵","⚡","🌟","💎","🏆"],
+  "Time": ["⏰","⌛","🕐","📅","📆","🗓️","⏱️","🔮","🌅","🌙","☀️","🌤️","📆","🗒️","🕰️"]
+};
+
+let activeTab = 'Status';
+
+function buildStickerPanel() {
+  const tabs = document.getElementById('sticker-tabs');
+  const grid = document.getElementById('sticker-grid');
+  tabs.innerHTML = Object.keys(stickerLib).map(k =>
+    `<button onclick="switchTab('${k}')" id="tab-${k}" style="padding:5px 12px;border-radius:20px;border:1px solid ${k===activeTab?'#e94560':'rgba(255,255,255,0.2)'};background:${k===activeTab?'#e94560':'transparent'};color:#fff;font-size:12px;cursor:pointer;white-space:nowrap">${k}</button>`
+  ).join('');
+  grid.innerHTML = stickerLib[activeTab].map(s =>
+    `<button class="sp-btn" onclick="placeSticker('${s}')">${s}</button>`
+  ).join('');
+}
+function switchTab(t) {
+  activeTab = t;
+  buildStickerPanel();
+}
+
+// ----- TOOL SWITCHING -----
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('#toolbar-top button[id^=btn-]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('btn-'+t)?.classList.add('active');
+  canvas.style.cursor = t==='erase' ? 'cell' : 'crosshair';
+  deselectSticker();
+}
+function setColor(el) {
+  document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  color = el.dataset.c;
+}
+function setCustomColor(v) {
+  color = v;
+  document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('active'));
+}
+function setBrushSize(el) {
+  document.querySelectorAll('.size-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  brushSize = +el.dataset.s;
+  document.getElementById('brush-range').value = brushSize;
+  document.getElementById('brush-size-label').textContent = brushSize+'px';
+}
+function brushSizeFromRange(v) {
+  brushSize = +v;
+  document.getElementById('brush-size-label').textContent = v+'px';
+  document.querySelectorAll('.size-btn').forEach(b=>b.classList.remove('active'));
+}
+function setOpacity(v) {
+  opacity = v/100;
+  document.getElementById('opacity-label').textContent = v+'%';
+}
+
+// ----- CAMERA / FILE LOAD -----
+function openCamera() {
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange = loadFile;
+  inp.click();
+}
+function loadFile(e) {
+  const f = (e.target||e).files?.[0] || e.files?.[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadImageSrc(ev.target.result);
+  reader.readAsDataURL(f);
+}
+function loadImageSrc(src) {
+  img = new Image();
+  img.onload = () => {
+    const maxW = wrap.clientWidth || 380;
+    const maxH = wrap.clientHeight || 500;
+    const scale = Math.min(maxW/img.width, maxH/img.height, 1);
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    history = [];
+    pushHistory();
+    stickerDiv.innerHTML = '';
+    stickerCount = 0;
+    showEditor();
+  };
+  img.src = src;
+}
+
+function showEditor() {
+  document.getElementById('screen-home').style.display = 'none';
+  const ed = document.getElementById('screen-editor');
+  ed.style.display = 'flex';
+  buildStickerPanel();
+}
+function goHome() {
+  document.getElementById('screen-editor').style.display = 'none';
+  document.getElementById('screen-home').style.display = 'flex';
+  closeStickerPanel();
+}
+
+// ----- DRAWING -----
+function getPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const src = e.touches?.[0] || e;
+  return [(src.clientX - r.left) * (canvas.width/r.width), (src.clientY - r.top) * (canvas.height/r.height)];
+}
+function startDraw(e) {
+  if (tool !== 'draw' && tool !== 'erase') return;
+  e.preventDefault();
+  drawing = true;
+  [lastX, lastY] = getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+}
+function moveDraw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const [x, y] = getPos(e);
+  ctx.lineWidth = brushSize;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (tool === 'erase') {
+    ctx.globalCompositeOperation = 'source-over';
+    // redraw original image pixels under brush
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, brushSize/2, 0, Math.PI*2);
+    ctx.clip();
+    if(img) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    lastX=x; lastY=y;
+    return;
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = opacity;
+  }
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  lastX = x; lastY = y;
+}
+function endDraw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  drawing = false;
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  pushHistory();
+}
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', moveDraw);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('touchstart', startDraw, {passive:false});
+canvas.addEventListener('touchmove', moveDraw, {passive:false});
+canvas.addEventListener('touchend', endDraw, {passive:false});
+canvas.addEventListener('click', () => deselectSticker());
+
+// ----- HISTORY -----
+function pushHistory() {
+  if (history.length > 30) history.shift();
+  history.push(canvas.toDataURL());
+}
+function undoLast() {
+  if (history.length <= 1) { showToast('Nothing to undo'); return; }
+  history.pop();
+  const prev = new Image();
+  prev.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(prev,0,0); };
+  prev.src = history[history.length-1];
+}
+
+// ----- STICKERS -----
+function toggleStickerPanel() {
+  document.getElementById('sticker-panel').classList.toggle('hidden');
+}
+function closeStickerPanel() {
+  document.getElementById('sticker-panel').classList.add('hidden');
+}
+
+function placeSticker(emoji) {
+  closeStickerPanel();
+  stickerCount++;
+  const el = document.createElement('div');
+  el.className = 'placed';
+  el.id = 'st-'+stickerCount;
+  el.dataset.emoji = emoji;
+  el.dataset.size = 40;
+  el.innerHTML = emoji;
+  el.style.fontSize = '40px';
+  el.style.left = '40%';
+  el.style.top = '40%';
+
+  const del = document.createElement('div');
+  del.className = 'delete-handle';
+  del.innerHTML = '✕';
+  del.style.display = 'none';
+  del.onclick = e => { e.stopPropagation(); el.remove(); deselectSticker(); };
+
+  const resize = document.createElement('div');
+  resize.className = 'resize-handle';
+  resize.style.display = 'none';
+  makeStickerResizable(resize, el);
+
+  el.appendChild(del);
+  el.appendChild(resize);
+  stickerDiv.appendChild(el);
+  makeStickerDraggable(el);
+  el.onclick = e => { e.stopPropagation(); selectSticker(el); };
+  selectSticker(el);
+}
+
+function selectSticker(el) {
+  deselectSticker();
+  selectedSticker = el;
+  el.classList.add('selected');
+  el.querySelector('.delete-handle').style.display='flex';
+  el.querySelector('.resize-handle').style.display='block';
+}
+function deselectSticker() {
+  if (selectedSticker) {
+    selectedSticker.classList.remove('selected');
+    selectedSticker.querySelector('.delete-handle').style.display='none';
+    selectedSticker.querySelector('.resize-handle').style.display='none';
+    selectedSticker = null;
+  }
+}
+
+function makeStickerDraggable(el) {
+  let ox,oy,ex,ey,drag=false;
+  const down = e => {
+    if (e.target.classList.contains('delete-handle')||e.target.classList.contains('resize-handle')) return;
+    drag=true;
+    const src=e.touches?.[0]||e;
+    ox=src.clientX; oy=src.clientY;
+    ex=el.offsetLeft; ey=el.offsetTop;
+  };
+  const move = e => {
+    if(!drag)return;
+    e.preventDefault();
+    const src=e.touches?.[0]||e;
+    el.style.left=(ex+src.clientX-ox)+'px';
+    el.style.top=(ey+src.clientY-oy)+'px';
+  };
+  const up=()=>{drag=false};
+  el.addEventListener('mousedown',down);
+  el.addEventListener('touchstart',down,{passive:false});
+  document.addEventListener('mousemove',move);
+  document.addEventListener('touchmove',move,{passive:false});
+  document.addEventListener('mouseup',up);
+  document.addEventListener('touchend',up);
+}
+
+function makeStickerResizable(handle, el) {
+  let sx,sy,sw,drag=false;
+  const down = e => {
+    e.stopPropagation();
+    drag=true;
+    const src=e.touches?.[0]||e;
+    sx=src.clientX; sy=src.clientY;
+    sw=+el.dataset.size||40;
+  };
+  const move = e => {
+    if(!drag)return;
+    e.preventDefault();
+    const src=e.touches?.[0]||e;
+    const delta=src.clientX-sx;
+    const ns=Math.max(16,Math.min(120,sw+delta));
+    el.style.fontSize=ns+'px';
+    el.dataset.size=ns;
+  };
+  const up=()=>{drag=false};
+  handle.addEventListener('mousedown',down);
+  handle.addEventListener('touchstart',down,{passive:false});
+  document.addEventListener('mousemove',move);
+  document.addEventListener('touchmove',move,{passive:false});
+  document.addEventListener('mouseup',up);
+  document.addEventListener('touchend',up);
+}
+
+// ----- EXPORT -----
+function exportPhoto() {
+  deselectSticker();
+  const exp = document.createElement('canvas');
+  exp.width = canvas.width;
+  exp.height = canvas.height;
+  const ec = exp.getContext('2d');
+  ec.drawImage(canvas, 0, 0);
+
+  // Flatten stickers onto export canvas
+  const cr = canvas.getBoundingClientRect();
+  const scaleX = canvas.width/cr.width;
+  const scaleY = canvas.height/cr.height;
+  const wr = wrap.getBoundingClientRect();
+
+  stickerDiv.querySelectorAll('.placed').forEach(st => {
+    const sr = st.getBoundingClientRect();
+    const dx = (sr.left - cr.left) * scaleX;
+    const dy = (sr.top - cr.top) * scaleY;
+    const fs = (+st.dataset.size||40) * scaleX;
+    ec.font = fs+'px serif';
+    ec.textBaseline = 'top';
+    ec.fillText(st.dataset.emoji, dx, dy);
+  });
+
+  const link = document.createElement('a');
+  link.download = 'photo-canvas-'+Date.now()+'.png';
+  link.href = exp.toDataURL('image/png');
+  link.click();
+  showToast('✅ Saved to Downloads!');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+// ----- INIT -----
+window.addEventListener('resize', () => {
+  if (img && document.getElementById('screen-editor').style.display !== 'none') {
+    const maxW = wrap.clientWidth||380, maxH = wrap.clientHeight||500;
+    const sc = Math.min(maxW/img.width, maxH/img.height, 1);
+    const nw = Math.round(img.width*sc), nh = Math.round(img.height*sc);
+    const tmp = canvas.toDataURL();
+    canvas.width = nw; canvas.height = nh;
+    const ri = new Image(); ri.onload = () => ctx.drawImage(ri,0,0,nw,nh); ri.src=tmp;
+  }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.placed') && !e.target.closest('#sticker-panel') && !e.target.closest('#btn-sticker')) {
+    deselectSticker();
+    if (e.target === wrap || e.target === stickerDiv) closeStickerPanel();
+  }
+});
+</script>
+</body>
+</html>
